@@ -1,0 +1,836 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Peak Forecast · Colorado</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+:root{
+  color-scheme: light;
+  --bg:#f4f5f2; --surface:#fcfcfb; --surface-2:#eeefea; --line:#dcddd6;
+  --text:#0b0b0b; --text-2:#52514e; --muted:#7a7974;
+  --accent:#1c5cab; --warn-bg:#fff4dc; --warn-line:#eda100; --bad-bg:#fde8e7; --bad-line:#e34948;
+  --summit:#2a78d6; --mid:#1baf7a; --base:#eb6834; --ref:#9a9993;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    color-scheme: dark;
+    --bg:#111110; --surface:#1a1a19; --surface-2:#242422; --line:#33332f;
+    --text:#ffffff; --text-2:#c3c2b7; --muted:#8f8e86;
+    --accent:#86b6ef; --warn-bg:#2f2610; --warn-line:#c98500; --bad-bg:#341a1a; --bad-line:#e66767;
+    --summit:#3987e5; --mid:#199e70; --base:#d95926; --ref:#6d6c66;
+  }
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif}
+.wrap{max-width:1240px;margin:0 auto;padding:20px 16px 60px}
+header{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;justify-content:space-between;margin-bottom:16px}
+h1{font-size:26px;margin:0;letter-spacing:-.02em}
+h1 small{display:block;font-size:13px;font-weight:400;color:var(--text-2);letter-spacing:0}
+h2{font-size:15px;margin:0 0 10px;letter-spacing:-.01em}
+h3{font-size:13px;margin:0 0 6px;color:var(--text-2);font-weight:600}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+select,button,input{font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+button{cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--surface);font-weight:600}
+button:hover{filter:brightness(.97)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:7px 11px;background:var(--surface)}
+.seg button.on{background:var(--text);color:var(--surface)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr))}
+.top{display:grid;gap:14px;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}
+@media (max-width:900px){.top{grid-template-columns:1fr}}
+#map{height:330px;border-radius:10px;border:1px solid var(--line)}
+.status{color:var(--text-2);font-size:13px;min-height:20px;margin:4px 0 12px}
+.status.err{color:var(--bad-line)}
+.band{border-left:4px solid var(--c);padding:12px 14px;background:var(--surface);border-radius:10px;border-top:1px solid var(--line);border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.band .lbl{font-weight:600;font-size:13px;color:var(--text-2)}
+.band .big{font-size:34px;font-weight:700;letter-spacing:-.02em;line-height:1.1;margin:4px 0 2px}
+.band .big span{font-size:14px;font-weight:500;color:var(--text-2)}
+.band .row{display:flex;justify-content:space-between;gap:8px;font-size:13px;border-top:1px dashed var(--line);padding-top:4px;margin-top:4px}
+.band .row b{font-weight:600}
+.pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--text-2)}
+.pill.High{border-color:#1baf7a}.pill.Moderate{border-color:#eda100}.pill.Low{border-color:#e34948}
+.alert{border:1px solid var(--bad-line);background:var(--bad-bg);border-radius:10px;padding:10px 14px;margin-bottom:10px}
+.alert.minor{border-color:var(--warn-line);background:var(--warn-bg)}
+.alert b{display:block}
+.alert details{font-size:13px;color:var(--text-2);white-space:pre-wrap}
+pre.summary{white-space:pre-wrap;background:var(--surface-2);border-radius:8px;padding:12px;margin:0 0 10px;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;max-height:340px;overflow:auto}
+.chartbox{position:relative;height:260px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text-2);margin-bottom:6px}
+.legend i{display:inline-block;width:12px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px;background:var(--c)}
+.note{font-size:12px;color:var(--muted);margin-top:6px}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--text-2);font-weight:600}
+tr.cons td{font-weight:700;background:var(--surface-2)}
+.sno{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));margin-bottom:12px}
+.sno .card{padding:12px}
+.sno .v{font-size:22px;font-weight:700}
+.nws p{margin:0 0 8px}
+.nws b{color:var(--text)}
+.muted{color:var(--text-2)}
+.custom{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;font-size:13px}
+.custom input{width:90px;padding:5px 8px}
+section{margin-top:14px}
+.method li{margin-bottom:4px}
+.leaflet-container{background:var(--surface-2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Peak Forecast <small>Colorado mountain weather by elevation: multi-model consensus, NWS and SNOTEL</small></h1>
+  <div class="controls">
+    <input id="find" list="locnames" placeholder="Search peaks & resorts…" aria-label="Search" style="width:200px">
+    <datalist id="locnames"></datalist>
+    <select id="loc" aria-label="Mountain"></select>
+    <div class="seg" id="days" role="group" aria-label="Forecast length">
+      <button data-d="3">3d</button><button data-d="5">5d</button><button data-d="7" class="on">7d</button><button data-d="10">10d</button>
+    </div>
+    <button id="refresh" class="primary">Refresh</button>
+  </div>
+</header>
+<div id="status" class="status"></div>
+<div id="alerts"></div>
+
+<div class="top">
+  <div>
+    <div class="grid g3" id="bands"></div>
+    <section class="card">
+      <h2>Share with friends</h2>
+      <pre class="summary" id="summary">Loading…</pre>
+      <div class="controls">
+        <button id="copy" class="primary">Copy text</button>
+        <button id="share">Share…</button>
+        <button id="img">Save image</button>
+        <span id="copied" class="muted"></span>
+      </div>
+    </section>
+  </div>
+  <div class="card">
+    <h2>Map</h2>
+    <div id="map"></div>
+    <div class="note"><span style="color:#2a78d6">●</span> ski areas · <span style="color:#4a3aa7">●</span> 14ers · <span style="color:#e87ba4">●</span> 13ers · <span style="color:#1baf7a">▲</span> SNOTEL stations. Click anywhere on the map to forecast a custom spot.</div>
+    <div class="custom" id="customBox" hidden>
+      Custom spot: base <input id="cBase" type="number" step="10"> ft · summit <input id="cTop" type="number" step="10"> ft
+      <button id="cGo">Update</button>
+    </div>
+  </div>
+</div>
+
+<section class="grid g2">
+  <div class="card"><h2>Snowfall by day</h2><div class="legend" data-legend></div><div class="chartbox"><canvas id="cSnow"></canvas></div><div class="note">Bars = model consensus (median). Hover a bar for the low–high range across models.</div></div>
+  <div class="card"><h2>Precipitation (liquid) by day</h2><div class="legend" data-legend></div><div class="chartbox"><canvas id="cPrecip"></canvas></div><div class="note">Water equivalent, inches. This is the most reliable precip number; snow depth depends on snow-to-liquid ratio.</div></div>
+  <div class="card"><h2>Temperature</h2><div class="legend" data-legend data-extra="32°F freezing"></div><div class="chartbox"><canvas id="cTemp"></canvas></div></div>
+  <div class="card"><h2>Relative humidity</h2><div class="legend" data-legend></div><div class="chartbox"><canvas id="cRH"></canvas></div></div>
+  <div class="card"><h2>Light: sunshine vs daylight (summit)</h2><div class="legend"><span><i style="--c:#eda100"></i>Sunshine hours</span><span><i style="--c:var(--ref)"></i>Cloudy daylight hours</span></div><div class="chartbox"><canvas id="cSun"></canvas></div><div class="note" id="sunNote"></div></div>
+  <div class="card"><h2>Solar radiation</h2><div class="legend" data-legend></div><div class="chartbox"><canvas id="cRad"></canvas></div><div class="note">Shortwave radiation, W/m². Higher is brighter (affects snow quality and sunburn risk).</div></div>
+  <div class="card"><h2>Wind gusts</h2><div class="legend" data-legend></div><div class="chartbox"><canvas id="cWind"></canvas></div></div>
+  <div class="card"><h2>Modeled snow depth</h2><div class="legend" data-legend></div><div class="chartbox"><canvas id="cDepth"></canvas></div><div class="note">Model-estimated snow depth (inches). Models handle snowpack roughly; for measured snowpack, use the SNOTEL stations below.</div></div>
+</section>
+
+<section class="card">
+  <h2>Measured snowpack: nearest SNOTEL stations (USDA NRCS)</h2>
+  <div class="sno" id="sno"></div>
+  <div class="seg" id="snoTabs" style="margin-bottom:8px"></div>
+  <div class="legend"><span><i style="--c:var(--summit)"></i>Snow water equivalent (this year)</span><span><i style="--c:var(--ref)"></i>30-yr median (1991–2020)</span><span><i style="--c:var(--mid)"></i>Snow depth</span></div>
+  <div class="chartbox"><canvas id="cSwe"></canvas></div>
+</section>
+
+<section class="card">
+  <h2>Model-by-model snowfall <span class="seg" id="tblBand" style="margin-left:8px;vertical-align:middle"><button data-b="summit" class="on">Summit</button><button data-b="mid">Mid</button><button data-b="base">Base</button></span></h2>
+  <div class="tablewrap"><table id="mtable"></table></div>
+  <div class="note">When models agree, confidence is higher. HRRR only runs 48 h ahead; ICON about 7.5 days. NWS row is the official National Weather Service gridded forecast at the grid elevation shown.</div>
+</section>
+
+<section class="card nws">
+  <h2>NWS official forecast <span class="muted" id="nwsElev" style="font-weight:400"></span></h2>
+  <div id="nws">Loading…</div>
+</section>
+
+<section class="card method">
+  <h2>How this forecast is built (and how accurate it can be)</h2>
+  <ul>
+    <li><b>Six independent weather models</b> via Open-Meteo: NOAA <b>HRRR</b> (3 km, best 0–48 h in mountains), NWS <b>National Blend of Models</b> (bias-corrected), NOAA <b>GFS</b>, <b>ECMWF IFS</b> (9 km), DWD <b>ICON</b>, Canada <b>GEM</b>. Each is pulled at the base, mid and summit coordinates and adjusted to that exact elevation.</li>
+    <li><b>Consensus</b> = median of the models (for multi-day totals, the median of each model's own storm total); <b>range</b> = lowest to highest model. Confidence is High / Moderate / Low based on how widely the models disagree.</li>
+    <li><b>Snowfall</b> is computed the same way for every model: hourly liquid precip × snow fraction (from wet-bulb temperature) × a temperature-based snow-to-liquid ratio tuned for Colorado's dry snow (about 10:1 near freezing, 15–19:1 in cold storms). Snow totals are less certain than liquid precip.</li>
+    <li><b>Snowpack</b> is measured, not modeled: daily SWE and depth from the nearest NRCS SNOTEL stations, compared with the 1991–2020 median.</li>
+    <li><b>Limits:</b> no forecast is exact. Mountain snow totals routinely miss by ±30–50% beyond 48 h, and orographic and wind effects at ridge scale are finer than any model grid. Days 1–2 are much more reliable than days 6–10. For backcountry travel, always check <a href="https://avalanche.state.co.us" target="_blank" rel="noopener">CAIC</a>.</li>
+  </ul>
+</section>
+</div>
+
+<script>
+'use strict';
+const TZ = 'America/Denver';
+const $ = s => document.querySelector(s);
+const MODELS = [
+  {id:'ncep_hrrr_conus', name:'HRRR'},
+  {id:'ncep_nbm_conus',  name:'NBM'},
+  {id:'gfs_seamless',    name:'GFS'},
+  {id:'ecmwf_ifs',       name:'ECMWF'},
+  {id:'icon_seamless',   name:'ICON'},
+  {id:'gem_seamless',    name:'GEM'},
+];
+// Peaks: summit coords snapped to the local high point of a 90 m DEM (Copernicus); listed summit elevations;
+// trailhead elevations from the same DEM. base = standard trailhead.
+/*PEAKS-START*/const PEAKS = [
+  {"g":"14ers","r":"Elk","n":"Castle Peak","top":[39.0097,-106.8614,14265],"base":[39.03,-106.805,9810],"thn":"Castle Creek"},
+  {"g":"14ers","r":"Elk","n":"Maroon Peak","top":[39.0708,-106.989,14156],"base":[39.0985,-106.941,9570],"thn":"Maroon Lake"},
+  {"g":"14ers","r":"Elk","n":"Capitol Peak","top":[39.1503,-107.0829,14130],"base":[39.2237,-107.0472,9530],"thn":"Capitol Creek"},
+  {"g":"14ers","r":"Elk","n":"Snowmass Mountain","top":[39.1188,-107.0665,14092],"base":[39.234,-106.9938,8670],"thn":"Snowmass Creek"},
+  {"g":"14ers","r":"Elk","n":"Conundrum Peak","top":[39.0156,-106.8627,14060],"base":[39.03,-106.805,9810],"thn":"Castle Creek"},
+  {"g":"14ers","r":"Elk","n":"Pyramid Peak","top":[39.0716,-106.9502,14018],"base":[39.0985,-106.941,9570],"thn":"Maroon Lake"},
+  {"g":"14ers","r":"Elk","n":"North Maroon Peak","top":[39.0761,-106.9874,14014],"base":[39.0985,-106.941,9570],"thn":"Maroon Lake"},
+  {"g":"14ers","r":"Front Range","n":"Grays Peak","top":[39.6339,-105.8176,14270],"base":[39.6608,-105.7844,11250],"thn":"Stevens Gulch"},
+  {"g":"14ers","r":"Front Range","n":"Torreys Peak","top":[39.6428,-105.8212,14267],"base":[39.6608,-105.7844,11250],"thn":"Stevens Gulch"},
+  {"g":"14ers","r":"Front Range","n":"Mt Blue Sky (Evans)","top":[39.5883,-105.6438,14264],"base":[39.6572,-105.604,10610],"thn":"Echo Lake"},
+  {"g":"14ers","r":"Front Range","n":"Longs Peak","top":[40.255,-105.6163,14255],"base":[40.2725,-105.5566,9390],"thn":"Longs Peak TH"},
+  {"g":"14ers","r":"Front Range","n":"Pikes Peak","top":[38.8405,-105.0442,14115],"base":[38.871,-105.1197,10090],"thn":"Crags"},
+  {"g":"14ers","r":"Front Range","n":"Mt Bierstadt","top":[39.5828,-105.6686,14060],"base":[39.5965,-105.7105,11640],"thn":"Guanella Pass"},
+  {"g":"14ers","r":"San Juan","n":"Uncompahgre Peak","top":[38.0717,-107.4621,14309],"base":[38.059,-107.422,11330],"thn":"Nellie Creek"},
+  {"g":"14ers","r":"San Juan","n":"Mt Wilson","top":[37.8392,-107.9916,14246],"base":[37.825,-108.04,9350],"thn":"Navajo Lake TH"},
+  {"g":"14ers","r":"San Juan","n":"El Diente Peak","top":[37.8394,-108.0053,14159],"base":[37.825,-108.04,9350],"thn":"Navajo Lake TH"},
+  {"g":"14ers","r":"San Juan","n":"Mt Sneffels","top":[38.0038,-107.7923,14150],"base":[38.011,-107.76,11350],"thn":"Yankee Boy Basin"},
+  {"g":"14ers","r":"San Juan","n":"Mt Eolus","top":[37.6206,-107.6221,14083],"base":[37.6337,-107.693,8240],"thn":"Needleton"},
+  {"g":"14ers","r":"San Juan","n":"Windom Peak","top":[37.6212,-107.5919,14082],"base":[37.6337,-107.693,8240],"thn":"Needleton"},
+  {"g":"14ers","r":"San Juan","n":"Sunlight Peak","top":[37.6274,-107.5959,14059],"base":[37.6337,-107.693,8240],"thn":"Needleton"},
+  {"g":"14ers","r":"San Juan","n":"Handies Peak","top":[37.913,-107.5044,14048],"base":[37.93,-107.515,11440],"thn":"American Basin"},
+  {"g":"14ers","r":"San Juan","n":"North Eolus","top":[37.6253,-107.6209,14039],"base":[37.6337,-107.693,8240],"thn":"Needleton"},
+  {"g":"14ers","r":"San Juan","n":"Redcloud Peak","top":[37.9409,-107.4217,14034],"base":[37.96,-107.46,11310],"thn":"Silver Creek"},
+  {"g":"14ers","r":"San Juan","n":"Wilson Peak","top":[37.8603,-107.9847,14017],"base":[37.88,-107.94,9700],"thn":"Rock of Ages"},
+  {"g":"14ers","r":"San Juan","n":"Wetterhorn Peak","top":[38.0606,-107.5109,14015],"base":[38.027,-107.502,11280],"thn":"Matterhorn Creek"},
+  {"g":"14ers","r":"San Juan","n":"San Luis Peak","top":[37.9868,-106.9311,14014],"base":[38.0,-106.86,10500],"thn":"Stewart Creek"},
+  {"g":"14ers","r":"San Juan","n":"Sunshine Peak","top":[37.9226,-107.4256,14001],"base":[37.96,-107.46,11310],"thn":"Silver Creek"},
+  {"g":"14ers","r":"Sangre de Cristo","n":"Blanca Peak","top":[37.5775,-105.4856,14345],"base":[37.553,-105.542,8000],"thn":"Lake Como Rd"},
+  {"g":"14ers","r":"Sangre de Cristo","n":"Crestone Peak","top":[37.9668,-105.5854,14294],"base":[37.989,-105.529,10800],"thn":"South Colony"},
+  {"g":"14ers","r":"Sangre de Cristo","n":"Crestone Needle","top":[37.9647,-105.5765,14197],"base":[37.989,-105.529,10800],"thn":"South Colony"},
+  {"g":"14ers","r":"Sangre de Cristo","n":"Kit Carson Peak","top":[37.9797,-105.6026,14165],"base":[38.004,-105.67,9940],"thn":"Willow Creek"},
+  {"g":"14ers","r":"Sangre de Cristo","n":"Challenger Point","top":[37.9803,-105.6066,14081],"base":[38.004,-105.67,9940],"thn":"Willow Creek"},
+  {"g":"14ers","r":"Sangre de Cristo","n":"Humboldt Peak","top":[37.9762,-105.5552,14064],"base":[37.989,-105.529,10800],"thn":"South Colony"},
+  {"g":"14ers","r":"Sangre de Cristo","n":"Culebra Peak","top":[37.1222,-105.1858,14047],"base":[37.14,-105.21,11240],"thn":"Culebra Ranch"},
+  {"g":"14ers","r":"Sangre de Cristo","n":"Ellingwood Point","top":[37.5826,-105.4927,14042],"base":[37.553,-105.542,8000],"thn":"Lake Como Rd"},
+  {"g":"14ers","r":"Sangre de Cristo","n":"Mt Lindsey","top":[37.5838,-105.4448,14042],"base":[37.603,-105.427,10700],"thn":"Lily Lake"},
+  {"g":"14ers","r":"Sangre de Cristo","n":"Little Bear Peak","top":[37.5667,-105.4972,14037],"base":[37.553,-105.542,8000],"thn":"Lake Como Rd"},
+  {"g":"14ers","r":"Sawatch","n":"Mt Elbert","top":[39.1178,-106.4454,14433],"base":[39.1513,-106.4123,10070],"thn":"North Elbert TH"},
+  {"g":"14ers","r":"Sawatch","n":"Mt Massive","top":[39.1875,-106.4757,14421],"base":[39.1513,-106.4123,10070],"thn":"North Elbert TH"},
+  {"g":"14ers","r":"Sawatch","n":"Mt Harvard","top":[38.9244,-106.3207,14420],"base":[38.8712,-106.265,9900],"thn":"N. Cottonwood"},
+  {"g":"14ers","r":"Sawatch","n":"La Plata Peak","top":[39.0294,-106.4729,14336],"base":[39.0703,-106.506,10470],"thn":"La Plata TH"},
+  {"g":"14ers","r":"Sawatch","n":"Mt Antero","top":[38.6741,-106.2462,14269],"base":[38.703,-106.27,9990],"thn":"Baldwin Gulch"},
+  {"g":"14ers","r":"Sawatch","n":"Mt Shavano","top":[38.6192,-106.2392,14229],"base":[38.606,-106.193,9840],"thn":"Blank Gulch"},
+  {"g":"14ers","r":"Sawatch","n":"Mt Belford","top":[38.9608,-106.3608,14197],"base":[38.9993,-106.377,9670],"thn":"Missouri Gulch"},
+  {"g":"14ers","r":"Sawatch","n":"Mt Princeton","top":[38.7492,-106.2424,14197],"base":[38.732,-106.181,8870],"thn":"Mt Princeton Rd"},
+  {"g":"14ers","r":"Sawatch","n":"Mt Yale","top":[38.8442,-106.3138,14196],"base":[38.8152,-106.3348,9930],"thn":"Denny Creek"},
+  {"g":"14ers","r":"Sawatch","n":"Tabeguache Peak","top":[38.6256,-106.2508,14155],"base":[38.606,-106.193,9840],"thn":"Blank Gulch"},
+  {"g":"14ers","r":"Sawatch","n":"Mt Oxford","top":[38.9648,-106.3388,14153],"base":[38.9993,-106.377,9670],"thn":"Missouri Gulch"},
+  {"g":"14ers","r":"Sawatch","n":"Mt Columbia","top":[38.9039,-106.2975,14073],"base":[38.8712,-106.265,9900],"thn":"N. Cottonwood"},
+  {"g":"14ers","r":"Sawatch","n":"Missouri Mountain","top":[38.9476,-106.3785,14067],"base":[38.9993,-106.377,9670],"thn":"Missouri Gulch"},
+  {"g":"14ers","r":"Sawatch","n":"Mt of the Holy Cross","top":[39.4668,-106.4817,14005],"base":[39.5008,-106.432,10300],"thn":"Half Moon"},
+  {"g":"14ers","r":"Sawatch","n":"Huron Peak","top":[38.9454,-106.4381,14003],"base":[38.975,-106.437,10560],"thn":"South Winfield"},
+  {"g":"14ers","r":"Tenmile-Mosquito","n":"Mt Lincoln","top":[39.3515,-106.1116,14286],"base":[39.333,-106.13,12160],"thn":"Kite Lake"},
+  {"g":"14ers","r":"Tenmile-Mosquito","n":"Quandary Peak","top":[39.3972,-106.1064,14265],"base":[39.387,-106.064,11140],"thn":"Quandary TH"},
+  {"g":"14ers","r":"Tenmile-Mosquito","n":"Mt Cameron","top":[39.3469,-106.1186,14238],"base":[39.333,-106.13,12160],"thn":"Kite Lake"},
+  {"g":"14ers","r":"Tenmile-Mosquito","n":"Mt Bross","top":[39.3354,-106.1075,14172],"base":[39.333,-106.13,12160],"thn":"Kite Lake"},
+  {"g":"14ers","r":"Tenmile-Mosquito","n":"Mt Democrat","top":[39.3396,-106.1399,14148],"base":[39.333,-106.13,12160],"thn":"Kite Lake"},
+  {"g":"14ers","r":"Tenmile-Mosquito","n":"Mt Sherman","top":[39.225,-106.1698,14036],"base":[39.2283,-106.1197,11380],"thn":"Fourmile Creek"},
+  {"g":"13ers","r":"Elk","n":"Cathedral Peak","top":[39.0344,-106.8589,13943],"base":[39.03,-106.805,9810],"thn":"Castle Creek"},
+  {"g":"13ers","r":"Elk","n":"Hagerman Peak","top":[39.1122,-107.0607,13710],"base":[39.0985,-106.941,9570],"thn":"Maroon Lake"},
+  {"g":"13ers","r":"Front Range","n":"Mt Meeker","top":[40.2486,-105.605,13911],"base":[40.2725,-105.5566,9390],"thn":"Longs Peak TH"},
+  {"g":"13ers","r":"Front Range","n":"Mt Edwards","top":[39.6364,-105.7939,13850],"base":[39.6608,-105.7844,11250],"thn":"Stevens Gulch"},
+  {"g":"13ers","r":"Front Range","n":"Mt Spalding","top":[39.6,-105.6569,13830],"base":[39.5965,-105.7105,11640],"thn":"Guanella Pass"},
+  {"g":"13ers","r":"Front Range","n":"Square Top Mountain","top":[39.5933,-105.7631,13794],"base":[39.5965,-105.7105,11640],"thn":"Guanella Pass"},
+  {"g":"13ers","r":"Front Range","n":"Argentine Peak","top":[39.6122,-105.7772,13740],"base":[39.6608,-105.7844,11250],"thn":"Stevens Gulch"},
+  {"g":"13ers","r":"Front Range","n":"Bald Mountain","top":[39.4447,-105.9708,13684],"base":[39.4108,-105.9686,11500],"thn":"Boreas Pass"},
+  {"g":"13ers","r":"Front Range","n":"Bard Peak","top":[39.7203,-105.8039,13620],"base":[39.703,-105.854,10300],"thn":"Herman Gulch"},
+  {"g":"13ers","r":"Front Range","n":"Rosalie Peak","top":[39.5561,-105.6064,13580],"base":[39.5965,-105.7105,11640],"thn":"Guanella Pass"},
+  {"g":"13ers","r":"Front Range","n":"Mt Parnassus","top":[39.72,-105.8225,13560],"base":[39.703,-105.854,10300],"thn":"Herman Gulch"},
+  {"g":"13ers","r":"Front Range","n":"North Arapaho Peak","top":[40.0265,-105.6514,13502],"base":[39.9945,-105.634,10100],"thn":"Fourth of July"},
+  {"g":"13ers","r":"Front Range","n":"South Arapaho Peak","top":[40.0212,-105.6521,13397],"base":[39.9945,-105.634,10100],"thn":"Fourth of July"},
+  {"g":"13ers","r":"Front Range","n":"Mt Guyot","top":[39.4589,-105.9375,13370],"base":[39.458,-105.916,11600],"thn":"Georgia Pass"},
+  {"g":"13ers","r":"Front Range","n":"James Peak","top":[39.8522,-105.69,13294],"base":[39.824,-105.646,10340],"thn":"St. Mary's Glacier"},
+  {"g":"13ers","r":"Front Range","n":"Mt Sniktau","top":[39.6787,-105.8574,13234],"base":[39.6634,-105.8792,11990],"thn":"Loveland Pass"},
+  {"g":"13ers","r":"Front Range","n":"Mt Flora","top":[39.805,-105.7364,13146],"base":[39.7983,-105.777,11290],"thn":"Berthoud Pass"},
+  {"g":"13ers","r":"Front Range (RMNP)","n":"Chiefs Head Peak","top":[40.2494,-105.6414,13530],"base":[40.2725,-105.5566,9390],"thn":"Longs Peak TH"},
+  {"g":"13ers","r":"Front Range (RMNP)","n":"Hagues Peak","top":[40.4847,-105.6452,13520],"base":[40.4085,-105.626,8540],"thn":"Lawn Lake"},
+  {"g":"13ers","r":"Front Range (RMNP)","n":"Fairchild Mountain","top":[40.4683,-105.6642,13500],"base":[40.4085,-105.626,8540],"thn":"Lawn Lake"},
+  {"g":"13ers","r":"Front Range (RMNP)","n":"Ypsilon Mountain","top":[40.4569,-105.6811,13460],"base":[40.4085,-105.626,8540],"thn":"Lawn Lake"},
+  {"g":"13ers","r":"Front Range (RMNP)","n":"Pagoda Mountain","top":[40.2492,-105.6264,13420],"base":[40.2725,-105.5566,9390],"thn":"Longs Peak TH"},
+  {"g":"13ers","r":"Front Range (RMNP)","n":"Mummy Mountain","top":[40.475,-105.6236,13400],"base":[40.4085,-105.626,8540],"thn":"Lawn Lake"},
+  {"g":"13ers","r":"Front Range (RMNP)","n":"Mt Alice","top":[40.2392,-105.6633,13270],"base":[40.208,-105.566,8500],"thn":"Wild Basin"},
+  {"g":"13ers","r":"Gore","n":"Mt Powell","top":[39.76,-106.341,13560],"base":[39.721,-106.403,9370],"thn":"Piney Lake"},
+  {"g":"13ers","r":"Mosquito","n":"Horseshoe Mountain","top":[39.1858,-106.1853,13898],"base":[39.2283,-106.1197,11380],"thn":"Fourmile Creek"},
+  {"g":"13ers","r":"Mosquito","n":"Mt Silverheels","top":[39.3394,-106.0052,13822],"base":[39.3619,-106.0627,11530],"thn":"Hoosier Pass"},
+  {"g":"13ers","r":"Mosquito","n":"Clinton Peak","top":[39.3683,-106.1492,13820],"base":[39.333,-106.13,12160],"thn":"Kite Lake"},
+  {"g":"13ers","r":"Mosquito","n":"Mt Buckskin","top":[39.3186,-106.1472,13810],"base":[39.333,-106.13,12160],"thn":"Kite Lake"},
+  {"g":"13ers","r":"Mosquito","n":"Mt Arkansas","top":[39.3325,-106.1781,13770],"base":[39.333,-106.13,12160],"thn":"Kite Lake"},
+  {"g":"13ers","r":"Mosquito","n":"Mosquito Peak","top":[39.3003,-106.1831,13700],"base":[39.333,-106.13,12160],"thn":"Kite Lake"},
+  {"g":"13ers","r":"Mosquito","n":"Mt Tweto","top":[39.3222,-106.1697,13620],"base":[39.333,-106.13,12160],"thn":"Kite Lake"},
+  {"g":"13ers","r":"San Juan","n":"Stewart Peak","top":[38.0221,-106.9246,13950],"base":[38.0,-106.86,10500],"thn":"Stewart Creek"},
+  {"g":"13ers","r":"San Juan","n":"Pigeon Peak","top":[37.6325,-107.6462,13940],"base":[37.6337,-107.693,8240],"thn":"Needleton"},
+  {"g":"13ers","r":"San Juan","n":"Vestal Peak","top":[37.6894,-107.6026,13864],"base":[37.736,-107.68,10260],"thn":"Molas Pass"},
+  {"g":"13ers","r":"San Juan","n":"Gladstone Peak","top":[37.8453,-107.984,13860],"base":[37.825,-108.04,9350],"thn":"Navajo Lake TH"},
+  {"g":"13ers","r":"San Juan","n":"Rio Grande Pyramid","top":[37.6793,-107.3925,13821],"base":[37.724,-107.259,9310],"thn":"Thirtymile"},
+  {"g":"13ers","r":"San Juan","n":"Turret Peak","top":[37.6275,-107.6398,13820],"base":[37.6337,-107.693,8240],"thn":"Needleton"},
+  {"g":"13ers","r":"San Juan","n":"Jagged Mountain","top":[37.6456,-107.584,13820],"base":[37.6337,-107.693,8240],"thn":"Needleton"},
+  {"g":"13ers","r":"San Juan","n":"Teakettle Mountain","top":[38.0008,-107.7617,13819],"base":[38.011,-107.76,11350],"thn":"Yankee Boy Basin"},
+  {"g":"13ers","r":"San Juan","n":"Arrow Peak","top":[37.6928,-107.6101,13810],"base":[37.736,-107.68,10260],"thn":"Molas Pass"},
+  {"g":"13ers","r":"San Juan","n":"Dallas Peak","top":[37.9881,-107.8249,13809],"base":[37.9375,-107.8123,8790],"thn":"Telluride"},
+  {"g":"13ers","r":"San Juan","n":"Vermilion Peak","top":[37.7992,-107.8284,13790],"base":[37.805,-107.807,9850],"thn":"Ice Lake"},
+  {"g":"13ers","r":"San Juan","n":"Potosi Peak","top":[37.9897,-107.7495,13760],"base":[38.011,-107.76,11350],"thn":"Yankee Boy Basin"},
+  {"g":"13ers","r":"San Juan","n":"Organ Mountain","top":[37.9908,-106.895,13750],"base":[38.0,-106.86,10500],"thn":"Stewart Creek"},
+  {"g":"13ers","r":"San Juan","n":"Golden Horn","top":[37.8047,-107.8248,13710],"base":[37.805,-107.807,9850],"thn":"Ice Lake"},
+  {"g":"13ers","r":"San Juan","n":"Gilpin Peak","top":[37.9867,-107.7931,13630],"base":[38.011,-107.76,11350],"thn":"Yankee Boy Basin"},
+  {"g":"13ers","r":"San Juan","n":"Matterhorn Peak","top":[38.065,-107.4959,13520],"base":[38.027,-107.502,11280],"thn":"Matterhorn Creek"},
+  {"g":"13ers","r":"San Juan","n":"Lizard Head","top":[37.8358,-107.9506,13113],"base":[37.8116,-107.907,10250],"thn":"Lizard Head Pass"},
+  {"g":"13ers","r":"Sangre de Cristo","n":"Mt Adams","top":[38.0075,-105.6047,13920],"base":[38.004,-105.67,9940],"thn":"Willow Creek"},
+  {"g":"13ers","r":"Sangre de Cristo","n":"California Peak","top":[37.6142,-105.4986,13850],"base":[37.603,-105.427,10700],"thn":"Lily Lake"},
+  {"g":"13ers","r":"Sangre de Cristo","n":"Tijeras Peak","top":[37.9244,-105.5403,13600],"base":[37.989,-105.529,10800],"thn":"South Colony"},
+  {"g":"13ers","r":"Sawatch","n":"Grizzly Peak A","top":[39.0425,-106.5975,13988],"base":[39.1086,-106.5639,12100],"thn":"Independence Pass"},
+  {"g":"13ers","r":"Sawatch","n":"Mt Ouray","top":[38.423,-106.2249,13971],"base":[38.391,-106.247,10890],"thn":"Marshall Pass"},
+  {"g":"13ers","r":"Sawatch","n":"Casco Peak","top":[39.1142,-106.4939,13900],"base":[39.0703,-106.506,10470],"thn":"La Plata TH"},
+  {"g":"13ers","r":"Sawatch","n":"French Mountain","top":[39.1286,-106.4825,13890],"base":[39.1513,-106.4123,10070],"thn":"North Elbert TH"},
+  {"g":"13ers","r":"Sawatch","n":"Ice Mountain","top":[38.9144,-106.4373,13850],"base":[38.975,-106.437,10560],"thn":"South Winfield"},
+  {"g":"13ers","r":"Sawatch","n":"Mt Oklahoma","top":[39.1789,-106.5061,13810],"base":[39.1513,-106.4123,10070],"thn":"North Elbert TH"},
+  {"g":"13ers","r":"Sawatch","n":"Mt Aetna","top":[38.5858,-106.32,13660],"base":[38.606,-106.193,9840],"thn":"Blank Gulch"},
+  {"g":"13ers","r":"Spanish Peaks","n":"West Spanish Peak","top":[37.3757,-104.9932,13626],"base":[37.3483,-105.0247,11260],"thn":"Cordova Pass"},
+  {"g":"13ers","r":"Tenmile","n":"Pacific Peak","top":[39.423,-106.1234,13950],"base":[39.415,-106.072,10380],"thn":"Spruce Creek"},
+  {"g":"13ers","r":"Tenmile","n":"Fletcher Mountain","top":[39.4033,-106.1289,13880],"base":[39.415,-106.072,10380],"thn":"Spruce Creek"},
+  {"g":"13ers","r":"Tenmile","n":"Crystal Peak","top":[39.4344,-106.1145,13852],"base":[39.415,-106.072,10380],"thn":"Spruce Creek"},
+  {"g":"13ers","r":"Tenmile","n":"Atlantic Peak","top":[39.4136,-106.1261,13840],"base":[39.415,-106.072,10380],"thn":"Spruce Creek"},
+  {"g":"13ers","r":"Tenmile","n":"Wheeler Mountain","top":[39.3805,-106.1361,13660],"base":[39.333,-106.13,12160],"thn":"Kite Lake"}
+].map(p => ({...p, th:1}));/*PEAKS-END*/
+// [lat, lon, elevation ft]. Ski-area coordinates approximate (within ~1 km), which is finer than model grids.
+const LOCS = [
+  {g:'Ski areas', n:'Arapahoe Basin',     base:[39.6425,-105.8719,10780], top:[39.6290,-105.8655,13050]},
+  {g:'Ski areas', n:'Aspen Mountain',     base:[39.1863,-106.8183,7945],  top:[39.1497,-106.8260,11212]},
+  {g:'Ski areas', n:'Aspen Snowmass',     base:[39.2087,-106.9496,8104],  top:[39.1780,-106.9950,12510]},
+  {g:'Ski areas', n:'Beaver Creek',       base:[39.6042,-106.5165,8100],  top:[39.5680,-106.5250,11440]},
+  {g:'Ski areas', n:'Breckenridge',       base:[39.4800,-106.0670,9600],  top:[39.4660,-106.0980,12998]},
+  {g:'Ski areas', n:'Copper Mountain',    base:[39.5022,-106.1511,9712],  top:[39.4600,-106.1700,12313]},
+  {g:'Ski areas', n:'Crested Butte',      base:[38.8991,-106.9659,9375],  top:[38.8833,-106.9431,12162]},
+  {g:'Ski areas', n:'Eldora',             base:[39.9372,-105.5827,9200],  top:[39.9375,-105.6055,10800]},
+  {g:'Ski areas', n:'Keystone',           base:[39.6045,-105.9544,9280],  top:[39.5750,-105.9350,12408]},
+  {g:'Ski areas', n:'Loveland',           base:[39.6800,-105.8979,10800], top:[39.6590,-105.8860,13010]},
+  {g:'Ski areas', n:'Monarch',            base:[38.5122,-106.3324,10790], top:[38.5050,-106.3290,11952]},
+  {g:'Ski areas', n:'Powderhorn',         base:[39.0694,-108.1507,8200],  top:[39.0450,-108.1570,9850]},
+  {g:'Ski areas', n:'Purgatory',          base:[37.6303,-107.8140,8793],  top:[37.6460,-107.8370,10822]},
+  {g:'Ski areas', n:'Silverton Mountain', base:[37.8847,-107.6659,10400], top:[37.8855,-107.6890,13487]},
+  {g:'Ski areas', n:'Ski Cooper',         base:[39.3602,-106.3010,10500], top:[39.3600,-106.3110,11700]},
+  {g:'Ski areas', n:'Steamboat',          base:[40.4572,-106.8045,6900],  top:[40.4525,-106.7353,10568]},
+  {g:'Ski areas', n:'Sunlight',           base:[39.3997,-107.3387,7885],  top:[39.3770,-107.3600,10474]},
+  {g:'Ski areas', n:'Telluride',          base:[37.9375,-107.8123,8725],  top:[37.9000,-107.8400,13150]},
+  {g:'Ski areas', n:'Vail',               base:[39.6403,-106.3742,8120],  top:[39.6060,-106.3550,11570]},
+  {g:'Ski areas', n:'Winter Park',        base:[39.8868,-105.7625,9000],  top:[39.8655,-105.7860,12060]},
+  {g:'Ski areas', n:'Wolf Creek',         base:[37.4747,-106.7930,10300], top:[37.4590,-106.8200,11904]},
+  ...PEAKS,
+];
+const BANDS = ['summit','mid','base'];
+const state = { loc: LOCS[4], days: 7, R: null, tblBand: 'summit', snoIdx: 0 };
+const charts = {};
+
+// ---------- helpers ----------
+const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const clamp = (x,a,b) => Math.max(a, Math.min(b, x));
+const nn = a => a.filter(v => v != null && !Number.isNaN(v));
+function quant(arr, q){ const a = nn(arr).sort((x,y)=>x-y); if(!a.length) return null; const p=(a.length-1)*q, lo=Math.floor(p), hi=Math.ceil(p); return a[lo]+(a[hi]-a[lo])*(p-lo); }
+const median = a => quant(a, .5);
+const mean = a => { const b = nn(a); return b.length ? b.reduce((s,v)=>s+v,0)/b.length : null; };
+const sum = a => nn(a).reduce((s,v)=>s+v,0);
+const fmtFt = ft => ft.toLocaleString('en-US') + '′';
+const dayLabel = d => new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+const dayShort = d => new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',day:'numeric'});
+const localDate = ms => new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'}).format(ms);
+function snowStr(x){ if(x==null) return '–'; if(x<0.1) return '0"'; if(x<0.95) return '<1"'; return Math.round(x)+'"'; }
+function snowRange(lo,hi){ const a=Math.round(lo), b=Math.round(hi); if(hi<0.1) return '0"'; if(b<1) return '<1"'; if(a===b) return a+'"'; return `${a}–${b}"`; }
+const inStr = x => x==null ? '–' : (x<0.005 ? '0.00"' : x.toFixed(2)+'"');
+const degStr = x => x==null ? '–' : Math.round(x)+'°';
+async function getJSON(url, opts){ const r = await fetch(url, opts); if(!r.ok) throw new Error(`${r.status} ${new URL(url).host}`); return r.json(); }
+
+// Stull (2011) wet-bulb, °F in/out
+function wetBulbF(tF, rh){
+  const t=(tF-32)*5/9, r=clamp(rh,5,99);
+  const tw = t*Math.atan(0.151977*Math.sqrt(r+8.313659)) + Math.atan(t+r) - Math.atan(r-1.676331)
+           + 0.00391838*Math.pow(r,1.5)*Math.atan(0.023101*r) - 4.686035;
+  return tw*9/5+32;
+}
+// fraction of precip falling as snow, from wet-bulb temp
+const snowFrac = (tF, rh) => clamp((35.5 - (rh==null ? tF : wetBulbF(tF, rh))) / 3, 0, 1);
+// snow-to-liquid ratio vs temperature (°F), Colorado-tuned climatology
+const SLR = [[-10,14],[0,15],[5,17],[10,19],[15,18],[20,16],[24,14],[28,12],[32,10],[34,8]];
+function slr(tF){
+  if(tF<=SLR[0][0]) return SLR[0][1];
+  for(let i=1;i<SLR.length;i++){ const [x1,y1]=SLR[i-1],[x2,y2]=SLR[i]; if(tF<=x2) return y1+(y2-y1)*(tF-x1)/(x2-x1); }
+  return SLR[SLR.length-1][1];
+}
+
+function bands(loc){
+  const [bl,bo,bf]=loc.base, [tl,to,tf]=loc.top;
+  return {
+    summit:{key:'summit', label:'Summit', lat:tl, lon:to, ft:tf},
+    mid:{key:'mid', label:'Mid-mountain', lat:(bl+tl)/2, lon:(bo+to)/2, ft:Math.round((bf+tf)/20)*10},
+    base:{key:'base', label: loc.th ? 'Trailhead' : 'Base', lat:bl, lon:bo, ft:bf},
+  };
+}
+
+// ---------- data: Open-Meteo multi-model ----------
+const HOURLY = ['temperature_2m','relative_humidity_2m','precipitation','wind_gusts_10m','shortwave_radiation','cloud_cover','snow_depth','freezing_level_height'];
+const DAILY = ['sunrise','sunset','daylight_duration','sunshine_duration','uv_index_max'];
+async function fetchModels(B){
+  const pts = BANDS.map(k=>B[k]);
+  const p = new URLSearchParams({
+    latitude: pts.map(p=>p.lat.toFixed(4)).join(','),
+    longitude: pts.map(p=>p.lon.toFixed(4)).join(','),
+    elevation: pts.map(p=>(p.ft*0.3048).toFixed(0)).join(','),
+    hourly: HOURLY.join(','), daily: DAILY.join(','),
+    models: MODELS.map(m=>m.id).join(','),
+    forecast_days: 11, timezone: TZ,
+    temperature_unit:'fahrenheit', wind_speed_unit:'mph', precipitation_unit:'inch',
+  });
+  const d = await getJSON('https://api.open-meteo.com/v1/forecast?'+p);
+  return Array.isArray(d) ? d : [d];
+}
+
+function processBand(r, nDays){
+  const H = r.hourly, time = H.time, D = r.daily;
+  const models = {};
+  for(const m of MODELS){
+    const g = v => H[`${v}_${m.id}`] || [];
+    const T=g('temperature_2m'), RH=g('relative_humidity_2m'), P=g('precipitation');
+    if(!T.some(v=>v!=null)) continue;
+    const snow = P.map((p,k)=> p==null || T[k]==null ? null : p*snowFrac(T[k], RH[k])*slr(T[k]));
+    const gd = v => (D[`${v}_${m.id}`] || []);
+    models[m.id] = {T, RH, P, snow, gust:g('wind_gusts_10m'), sw:g('shortwave_radiation'), cc:g('cloud_cover'),
+      sd:g('snow_depth'), fl:g('freezing_level_height'),
+      sun:gd('sunshine_duration'), dl:gd('daylight_duration'), uv:gd('uv_index_max'), rise:gd('sunrise'), set:gd('sunset')};
+  }
+  const ids = Object.keys(models);
+  const days = [...new Set(time.map(t=>t.slice(0,10)))].slice(0, nDays);
+  const lastIdx = time.findIndex(t => t.slice(0,10) > days[days.length-1]);
+  const hEnd = lastIdx < 0 ? time.length : lastIdx;
+  const hc = (key, fn=median) => time.slice(0,hEnd).map((_,k)=> fn(ids.map(id => models[id][key][k])));
+  const hourly = { time: time.slice(0,hEnd), T:hc('T'), RH:hc('RH'), P:hc('P',mean), gust:hc('gust'), sw:hc('sw'),
+                   sd:hc('sd').map(v=>v==null?null:v*12), fl:hc('fl') };
+  // daily per model (only if the model covers >= 20 h of that day)
+  const daily = days.map((d, di) => {
+    const idx = time.map((t,k)=>t.startsWith(d)?k:-1).filter(k=>k>=0);
+    const per = {};
+    for(const id of ids){
+      const M = models[id], ok = idx.filter(k => M.T[k]!=null && M.P[k]!=null);
+      if(ok.length < 20) continue;
+      per[id] = { snow: sum(ok.map(k=>M.snow[k])), P: sum(ok.map(k=>M.P[k])),
+        hi: Math.max(...ok.map(k=>M.T[k])), lo: Math.min(...ok.map(k=>M.T[k])),
+        rh: mean(ok.map(k=>M.RH[k])), gust: Math.max(...nn(ok.map(k=>M.gust[k])), 0) };
+    }
+    const stat = key => { const v = Object.values(per).map(o=>o[key]); return {med:median(v), lo:quant(v,0), hi:quant(v,1), n:nn(v).length}; };
+    const dm = key => median(ids.map(id => models[id][key][di]));
+    const fls = idx.map(k=>hourly.fl[k]).filter(v=>v!=null);
+    const hasPrecip = idx.some(k => (hourly.P[k]||0) > 0.005);
+    return { d, per, snow:stat('snow'), P:stat('P'), hi:stat('hi'), lo:stat('lo'), rh:stat('rh'), gust:stat('gust'),
+      sunH: dm('sun')!=null ? dm('sun')/3600 : null, dlH: dm('dl')!=null ? dm('dl')/3600 : null, uv: dm('uv'),
+      rise: models[ids[0]]?.rise[di], set: models[ids[0]]?.set[di],
+      snowLevel: hasPrecip && fls.length ? Math.max(0, Math.min(...fls) - 1000) : null };
+  });
+  // storm totals: sum of daily medians; range from models covering every day
+  const full = ids.filter(id => daily.every(d => d.per[id]));
+  const tot = key => {
+    if(full.length >= 2){ const v = full.map(id => sum(daily.map(d=>d.per[id][key]))); return {med:median(v), lo:Math.min(...v), hi:Math.max(...v), n:full.length}; }
+    const lo = sum(daily.map(d=>d[key].lo)), hi = sum(daily.map(d=>d[key].hi));
+    return {med:clamp(sum(daily.map(d=>d[key].med)), lo, hi), lo, hi, n:full.length};
+  };
+  return { ids, models, hourly, daily, days, snowTot: tot('snow'), PTot: tot('P'), elevUsed: r.elevation };
+}
+
+function confidence(t){
+  const spread = t.hi - t.lo, ref = Math.max(t.med, 2);
+  const r = spread / ref;
+  return r < 0.6 ? 'High' : r < 1.2 ? 'Moderate' : 'Low';
+}
+
+// ---------- NWS ----------
+function parseDurH(s){ const m = /P(?:(\d+)D)?(?:T(?:(\d+)H)?)?/.exec(s); return (+(m[1]||0))*24 + (+(m[2]||0)) || 1; }
+function nwsDaily(series, f){
+  const out = {};
+  for(const v of (series?.values||[])){
+    if(v.value==null) continue;
+    const [start, dur] = v.validTime.split('/'), hrs = parseDurH(dur), t0 = Date.parse(start);
+    for(let h=0; h<hrs; h++){ const d = localDate(t0 + h*36e5); out[d] = (out[d]||0) + v.value*f/hrs; }
+  }
+  return out;
+}
+async function fetchNWS(pt){
+  const ll = `${pt.lat.toFixed(4)},${pt.lon.toFixed(4)}`;
+  const [P, alerts] = await Promise.allSettled([getJSON(`https://api.weather.gov/points/${ll}`), getJSON(`https://api.weather.gov/alerts/active?point=${ll}`)]);
+  const out = { alerts: alerts.status==='fulfilled' ? alerts.value.features.map(f=>f.properties) : null };
+  if(P.status!=='fulfilled') return out;
+  const pp = P.value.properties;
+  const [grid, fc] = await Promise.allSettled([getJSON(pp.forecastGridData), getJSON(pp.forecast)]);
+  if(grid.status==='fulfilled'){
+    const g = grid.value.properties;
+    out.elevFt = Math.round(g.elevation.value/0.3048);
+    out.snow = nwsDaily(g.snowfallAmount, 1/25.4);
+    out.qpf = nwsDaily(g.quantitativePrecipitation, 1/25.4);
+  }
+  if(fc.status==='fulfilled') out.periods = fc.value.properties.periods;
+  return out;
+}
+
+// ---------- SNOTEL ----------
+const AWDB = 'https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1';
+async function snotelStations(){
+  try { const c = JSON.parse(localStorage.getItem('snotel-co-v1')); if(c && Date.now()-c.t < 7*864e5) return c.s; } catch(e){}
+  const s = (await getJSON(`${AWDB}/stations?stationTriplets=*:CO:SNTL&activeOnly=true`))
+    .filter(x=>x.stationTriplet.endsWith(':CO:SNTL'))
+    .map(x=>({id:x.stationTriplet, name:x.name, lat:x.latitude, lon:x.longitude, ft:Math.round(x.elevation)}));
+  try { localStorage.setItem('snotel-co-v1', JSON.stringify({t:Date.now(), s})); } catch(e){}
+  return s;
+}
+function distMi(a,b,c,d){ const R=3958.8, r=Math.PI/180, x=Math.sin((c-a)*r/2)**2 + Math.cos(a*r)*Math.cos(c*r)*Math.sin((d-b)*r/2)**2; return 2*R*Math.asin(Math.sqrt(x)); }
+async function fetchSnotel(pt, all){
+  const near = all.map(s=>({...s, mi:distMi(pt.lat,pt.lon,s.lat,s.lon)})).sort((a,b)=>a.mi-b.mi).slice(0,3);
+  const end = localDate(Date.now()), begin = localDate(Date.now()-365*864e5);
+  const data = await getJSON(`${AWDB}/data?stationTriplets=${near.map(s=>s.id).join(',')}&elements=WTEQ,SNWD&duration=DAILY&beginDate=${begin}&endDate=${end}&centralTendencyType=MEDIAN`);
+  for(const s of near){
+    const rec = data.find(d=>d.stationTriplet===s.id);
+    for(const el of (rec?.data||[])) s[el.stationElement.elementCode] = el.values;
+  }
+  return near;
+}
+
+// ---------- load ----------
+let stationsCache = null;
+async function load(){
+  const loc = state.loc, B = bands(loc);
+  setStatus(`Loading ${loc.n}: 6 models × 3 elevations, NWS, SNOTEL…`);
+  $('#refresh').disabled = true;
+  const [om, nws, sno] = await Promise.allSettled([
+    fetchModels(B),
+    fetchNWS(B.summit),
+    (async()=>{ stationsCache = stationsCache || await snotelStations(); drawStations(); return fetchSnotel(B.summit, stationsCache); })(),
+  ]);
+  $('#refresh').disabled = false;
+  if(om.status !== 'fulfilled'){ setStatus('Could not load model data: '+om.reason.message+'. Check your connection and press Refresh.', true); return; }
+  const raw = om.value;
+  state.raw = raw; state.B = B;
+  state.nws = nws.status==='fulfilled' ? nws.value : null;
+  state.sno = sno.status==='fulfilled' ? sno.value : null;
+  state.fetched = new Date();
+  compute();
+  const warn = [!state.nws && 'NWS unavailable', !state.sno && 'SNOTEL unavailable'].filter(Boolean);
+  setStatus(`Updated ${state.fetched.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})} · models: ${state.R.summit.ids.map(id=>MODELS.find(m=>m.id===id).name).join(', ')}` + (warn.length ? ' · ⚠ '+warn.join(', ') : ''));
+}
+function compute(){
+  const R = {};
+  BANDS.forEach((k,i)=> R[k] = processBand(state.raw[i], state.days));
+  state.R = R;
+  render();
+}
+function setStatus(t, err){ const s=$('#status'); s.textContent=t; s.className='status'+(err?' err':''); }
+
+// ---------- render ----------
+const color = k => cssv('--'+k);
+function render(){
+  renderAlerts(); renderBands(); renderCharts(); renderTable(); renderNWS(); renderSnotel();
+  $('#summary').textContent = buildSummary();
+  const map = state.map; if(map){ map.setView([state.B.summit.lat, state.B.summit.lon], 10); }
+}
+function renderAlerts(){
+  const a = state.nws?.alerts || [];
+  $('#alerts').innerHTML = '';
+  for(const p of a){
+    const el = document.createElement('div');
+    el.className = 'alert' + (/Severe|Extreme/.test(p.severity) ? '' : ' minor');
+    const b = document.createElement('b'); b.textContent = '⚠ ' + p.event + (p.ends ? ' · until ' + new Date(p.ends).toLocaleString('en-US',{weekday:'short',hour:'numeric',minute:'2-digit'}) : '');
+    const d = document.createElement('details'); const s = document.createElement('summary'); s.textContent = p.headline || 'Details'; d.append(s, document.createTextNode('\n'+(p.description||'')));
+    el.append(b, d); $('#alerts').append(el);
+  }
+}
+function renderBands(){
+  const box = $('#bands'); box.innerHTML='';
+  for(const k of BANDS){
+    const r = state.R[k], b = state.B[k], t = r.snowTot, conf = confidence(t);
+    const his = r.daily.map(d=>d.hi.med), los = r.daily.map(d=>d.lo.med);
+    const el = document.createElement('div'); el.className='band'; el.style.setProperty('--c', color(k));
+    el.innerHTML = `<div class="lbl">${b.label}${k==='base'&&state.loc.thn?` (${state.loc.thn})`:''} · ${fmtFt(b.ft)}</div>
+      <div class="big">${snowStr(t.med)} <span>snow · range ${snowRange(t.lo,t.hi)}</span></div>
+      <span class="pill ${conf}">${conf} confidence</span>
+      <div class="row"><span>Liquid precip</span><b>${inStr(r.PTot.med)}</b></div>
+      <div class="row"><span>Highs</span><b>${degStr(Math.min(...nn(his)))} to ${degStr(Math.max(...nn(his)))}</b></div>
+      <div class="row"><span>Lows</span><b>${degStr(Math.min(...nn(los)))} to ${degStr(Math.max(...nn(los)))}</b></div>
+      <div class="row"><span>Avg humidity</span><b>${Math.round(mean(r.daily.map(d=>d.rh.med)))}%</b></div>
+      <div class="row"><span>Peak gust</span><b>${Math.round(Math.max(...nn(r.daily.map(d=>d.gust.med))))} mph</b></div>`;
+    box.append(el);
+  }
+  document.querySelectorAll('[data-legend]').forEach(l=>{
+    l.innerHTML = BANDS.map(k=>`<span><i style="--c:var(--${k})"></i>${state.B[k].label} ${fmtFt(state.B[k].ft)}</span>`).join('')
+      + (l.dataset.extra ? `<span><i style="--c:var(--ref)"></i>${l.dataset.extra}</span>` : '');
+  });
+}
+
+function baseOpts(yTitle, extra={}){
+  const tc = cssv('--text-2'), gc = cssv('--line');
+  return {
+    responsive:true, maintainAspectRatio:false, animation:false,
+    interaction:{mode:'index', intersect:false},
+    plugins:{ legend:{display:false}, tooltip:{ backgroundColor:cssv('--surface'), titleColor:cssv('--text'), bodyColor:cssv('--text'), borderColor:gc, borderWidth:1, padding:10, boxPadding:4 } },
+    scales:{
+      x:{ grid:{display:false}, ticks:{color:tc, maxRotation:0, autoSkip:false, font:{size:11}}, border:{color:gc} },
+      y:{ grid:{color:gc}, ticks:{color:tc, font:{size:11}}, border:{display:false}, title:{display:!!yTitle, text:yTitle, color:tc, font:{size:11}}, ...(extra.y||{}) },
+    }, ...extra.root,
+  };
+}
+function mk(id, cfg){ if(charts[id]) charts[id].destroy(); charts[id] = new Chart(document.getElementById(id), cfg); }
+
+function hourlyChart(id, key, yTitle, fmt, extraDs=[], yExtra={}){
+  const h = state.R.summit.hourly;
+  const labels = h.time.map(t => { const d = new Date(t+':00Z'), o = {timeZone:'UTC'}; return d.toLocaleDateString('en-US',{...o,weekday:'short'}) + ' ' + d.toLocaleTimeString('en-US',{...o,hour:'numeric'}).replace(' ','').toLowerCase(); });
+  const ds = BANDS.map(k => ({ label: state.B[k].label, data: state.R[k].hourly[key], borderColor: color(k), backgroundColor: color(k), borderWidth:2, pointRadius:0, pointHoverRadius:4, tension:.3, spanGaps:true }));
+  const o = baseOpts(yTitle, {y:yExtra});
+  o.scales.x.ticks.callback = (v,i) => { const t = h.time[i]; return t.endsWith('T00:00') ? labels[i].split(' ')[0] : (t.endsWith('T12:00') ? '' : null); };
+  o.scales.x.grid = {display:true, color: c => h.time[c.index]?.endsWith('T00:00') ? cssv('--line') : 'transparent'};
+  o.plugins.tooltip.callbacks = { title: it => labels[it[0].dataIndex], label: c => ` ${c.dataset.label}: ${c.raw==null?'–':fmt(c.raw)}` };
+  mk(id, { type:'line', data:{ labels, datasets:[...ds, ...extraDs.map(e=>({...e, data: labels.map(()=>e.value), borderColor:color('ref'), borderDash:[4,4], borderWidth:1.5, pointRadius:0}))] }, options:o });
+}
+
+function dailyBars(id, key, yTitle, fmt){
+  const days = state.R.summit.days;
+  const o = baseOpts(yTitle, {y:{beginAtZero:true}});
+  o.plugins.tooltip.callbacks = {
+    title: it => dayLabel(days[it[0].dataIndex]),
+    label: c => { const s = state.R[BANDS[c.datasetIndex]].daily[c.dataIndex][key]; return ` ${c.dataset.label}: ${fmt(s.med)}  (models ${fmt(s.lo)}–${fmt(s.hi)}, n=${s.n})`; },
+  };
+  mk(id, { type:'bar', data:{ labels: days.map(dayShort), datasets: BANDS.map(k => ({
+    label: state.B[k].label, data: state.R[k].daily.map(d=>d[key].med),
+    backgroundColor: color(k), borderRadius:{topLeft:4, topRight:4}, borderSkipped:'bottom', borderColor:cssv('--surface'), borderWidth:{left:1,right:1}, maxBarThickness:22 })) }, options:o });
+}
+
+function renderCharts(){
+  dailyBars('cSnow', 'snow', 'inches of snow', v => v==null?'–':v.toFixed(1)+'"');
+  dailyBars('cPrecip', 'P', 'inches of water', v => v==null?'–':v.toFixed(2)+'"');
+  hourlyChart('cTemp', 'T', '°F', v=>Math.round(v)+'°F', [{label:'Freezing', value:32}]);
+  hourlyChart('cRH', 'RH', '%', v=>Math.round(v)+'%', [], {min:0, max:100});
+  hourlyChart('cRad', 'sw', 'W/m²', v=>Math.round(v)+' W/m²', [], {beginAtZero:true});
+  hourlyChart('cWind', 'gust', 'mph', v=>Math.round(v)+' mph', [], {beginAtZero:true});
+  hourlyChart('cDepth', 'sd', 'inches', v=>v.toFixed(1)+'"', [], {beginAtZero:true});
+  // sunshine
+  const S = state.R.summit.daily;
+  const o = baseOpts('hours', {y:{beginAtZero:true, stacked:true}}); o.scales.x.stacked = true;
+  o.plugins.tooltip.callbacks = { title: it => dayLabel(S[it[0].dataIndex].d),
+    afterBody: it => { const d = S[it[0].dataIndex]; const f = s => s ? new Date(s+':00Z').toLocaleTimeString('en-US',{timeZone:'UTC',hour:'numeric',minute:'2-digit'}) : '–';
+      return [`UV index max: ${d.uv==null?'–':d.uv.toFixed(1)}`, `Sunrise ${f(d.rise)} · Sunset ${f(d.set)}`]; },
+    label: c => ` ${c.dataset.label}: ${c.raw==null?'–':c.raw.toFixed(1)} h` };
+  mk('cSun', { type:'bar', data:{ labels:S.map(d=>dayShort(d.d)), datasets:[
+    {label:'Sunshine', data:S.map(d=>d.sunH), backgroundColor:'#eda100', maxBarThickness:30},
+    {label:'Cloudy daylight', data:S.map(d=> d.dlH!=null && d.sunH!=null ? Math.max(0,d.dlH-d.sunH) : null), backgroundColor:color('ref'), borderRadius:{topLeft:4,topRight:4}, borderSkipped:'bottom', maxBarThickness:30},
+  ]}, options:o });
+  const uv = nn(S.map(d=>d.uv)); $('#sunNote').textContent = uv.length ? `Peak UV index ${Math.max(...uv).toFixed(1)}. UV is ~10% stronger per 3,300 ft of elevation and snow reflects up to 80% of it.` : '';
+}
+
+function renderTable(){
+  const k = state.tblBand, r = state.R[k], days = r.days;
+  let h = `<thead><tr><th>${state.B[k].label} ${fmtFt(state.B[k].ft)}</th>${days.map(d=>`<th>${dayShort(d)}</th>`).join('')}<th>Total</th></tr></thead><tbody>`;
+  for(const id of r.ids){
+    const vals = r.daily.map(d=>d.per[id]?.snow);
+    const all = vals.every(v=>v!=null);
+    h += `<tr><td>${MODELS.find(m=>m.id===id).name}</td>${vals.map(v=>`<td>${v==null?'<span class="muted">–</span>':v.toFixed(1)+'"'}</td>`).join('')}<td>${all?sum(vals).toFixed(1)+'"':'<span class="muted">partial</span>'}</td></tr>`;
+  }
+  h += `<tr class="cons"><td>Consensus</td>${r.daily.map(d=>`<td>${d.snow.med==null?'–':d.snow.med.toFixed(1)+'"'}</td>`).join('')}<td>${r.snowTot.med.toFixed(1)}"</td></tr>`;
+  const n = state.nws;
+  if(n?.snow){
+    const v = days.map(d=>n.snow[d]);
+    h += `<tr><td>NWS official (${fmtFt(n.elevFt)})</td>${v.map(x=>`<td>${x==null?'<span class="muted">–</span>':x.toFixed(1)+'"'}</td>`).join('')}<td>${sum(v).toFixed(1)}"</td></tr>`;
+  }
+  h += `<tr><td class="muted">Snow level (approx.)</td>${r.daily.map(d=>`<td class="muted">${d.snowLevel==null?'–':fmtFt(Math.round(d.snowLevel/100)*100)}</td>`).join('')}<td></td></tr>`;
+  h += `<tr><td class="muted">Liquid (consensus)</td>${r.daily.map(d=>`<td class="muted">${inStr(d.P.med)}</td>`).join('')}<td class="muted">${inStr(r.PTot.med)}</td></tr>`;
+  $('#mtable').innerHTML = h + '</tbody>';
+}
+
+function renderNWS(){
+  const n = state.nws, box = $('#nws'); box.innerHTML = '';
+  $('#nwsElev').textContent = n?.elevFt ? `· grid point near summit, ${fmtFt(n.elevFt)}` : '';
+  if(!n?.periods){ box.textContent = 'NWS forecast unavailable right now (api.weather.gov). Model data above is unaffected.'; return; }
+  for(const p of n.periods.slice(0,8)){ const el = document.createElement('p'); const b = document.createElement('b'); b.textContent = p.name + ': '; el.append(b, document.createTextNode(p.detailedForecast)); box.append(el); }
+}
+
+function lastVal(vals){ for(let i=(vals||[]).length-1;i>=0;i--) if(vals[i].value!=null) return vals[i]; return null; }
+function renderSnotel(){
+  const S = state.sno, box = $('#sno'); box.innerHTML='';
+  if(!S){ box.textContent = 'SNOTEL data unavailable right now.'; return; }
+  S.forEach((s,i)=>{
+    const swe = lastVal(s.WTEQ), dep = lastVal(s.SNWD);
+    const wk = (s.SNWD||[]).filter(v=>v.value!=null); const ago = wk.length>7 ? wk[wk.length-8].value : null;
+    const pct = swe && swe.median > 0 ? Math.round(100*swe.value/swe.median)+'% of median' : (swe && swe.median===0 ? 'median is 0" (season not started)' : '');
+    const el = document.createElement('div'); el.className='card';
+    el.innerHTML = `<h3>${s.name} · ${fmtFt(s.ft)} · ${s.mi.toFixed(1)} mi</h3>
+      <div class="v">${swe?swe.value.toFixed(1)+'"':'–'} <span class="muted" style="font-size:12px;font-weight:500">SWE</span> · ${dep?dep.value+'"':'–'} <span class="muted" style="font-size:12px;font-weight:500">depth</span></div>
+      <div class="note">${pct}${dep&&ago!=null?` · depth change 7 d: ${dep.value-ago>=0?'+':''}${dep.value-ago}"`:''} · as of ${swe?dayLabel(swe.date):'–'}</div>`;
+    box.append(el);
+  });
+  $('#snoTabs').innerHTML = S.map((s,i)=>`<button data-i="${i}" class="${i===state.snoIdx?'on':''}">${s.name}</button>`).join('');
+  const s = S[state.snoIdx] || S[0];
+  const W = s.WTEQ||[], dmap = Object.fromEntries((s.SNWD||[]).map(v=>[v.date,v.value]));
+  const o = baseOpts('inches', {y:{beginAtZero:true}});
+  o.scales.x.ticks.callback = (v,i) => W[i]?.date.endsWith('-01') ? new Date(W[i].date+'T12:00').toLocaleDateString('en-US',{month:'short'}) : null;
+  o.plugins.tooltip.callbacks = { title: it => dayLabel(W[it[0].dataIndex].date), label: c => ` ${c.dataset.label}: ${c.raw==null?'–':c.raw+'"'}` };
+  mk('cSwe', { type:'line', data:{ labels: W.map(v=>v.date), datasets:[
+    {label:'SWE', data:W.map(v=>v.value), borderColor:color('summit'), backgroundColor:color('summit'), borderWidth:2, pointRadius:0, spanGaps:true},
+    {label:'Median SWE', data:W.map(v=>v.median??null), borderColor:color('ref'), borderDash:[4,4], borderWidth:1.5, pointRadius:0, spanGaps:true},
+    {label:'Snow depth', data:W.map(v=>dmap[v.date]??null), borderColor:color('mid'), backgroundColor:color('mid'), borderWidth:1.5, pointRadius:0, spanGaps:true},
+  ]}, options:o });
+}
+
+// ---------- summary ----------
+function buildSummary(){
+  const L = state.loc, R = state.R, B = state.B, days = R.summit.days;
+  const lines = [];
+  lines.push(`🏔️ ${L.n} forecast · ${dayLabel(days[0])} → ${dayLabel(days[days.length-1])}`);
+  lines.push('');
+  lines.push('❄️ Snow (best guess, range across models):');
+  for(const k of BANDS){ const t = R[k].snowTot; lines.push(`  • ${B[k].label} ${fmtFt(B[k].ft)}: ${snowStr(t.med)} (${snowRange(t.lo,t.hi)})`); }
+  const big = R.summit.daily.reduce((a,d)=> (d.snow.med||0) > (a.snow.med||0) ? d : a, R.summit.daily[0]);
+  if((big.snow.med||0) >= 1) lines.push(`  📅 Biggest day: ${dayLabel(big.d)} (${snowStr(big.snow.med)} up top)`);
+  const sl = nn(R.summit.daily.map(d=>d.snowLevel)); if(sl.length && R.summit.PTot.med > 0.05) lines.push(`  Snow level dips to ~${fmtFt(Math.round(Math.min(...sl)/500)*500)}`);
+  lines.push(`💧 Liquid precip: ${inStr(R.summit.PTot.med)} summit / ${inStr(R.base.PTot.med)} base`);
+  lines.push('');
+  lines.push('🌡️ Temps (high / low):');
+  for(const k of BANDS){ const d = R[k].daily; lines.push(`  • ${B[k].label}: ${degStr(Math.min(...nn(d.map(x=>x.hi.med))))}–${degStr(Math.max(...nn(d.map(x=>x.hi.med))))} / ${degStr(Math.min(...nn(d.map(x=>x.lo.med))))}–${degStr(Math.max(...nn(d.map(x=>x.lo.med))))}F`); }
+  lines.push(`💦 Humidity: avg ${Math.round(mean(R.summit.daily.map(d=>d.rh.med)))}% summit, ${Math.round(mean(R.base.daily.map(d=>d.rh.med)))}% base`);
+  const S = R.summit.daily.filter(d=>d.sunH!=null);
+  if(S.length){ const best = S.reduce((a,d)=>d.sunH>a.sunH?d:a); lines.push(`☀️ Sun: ~${mean(S.map(d=>d.sunH)).toFixed(1)} h/day avg · sunniest ${dayLabel(best.d).split(',')[0]} (${best.sunH.toFixed(1)} h) · UV max ${Math.max(...nn(S.map(d=>d.uv))).toFixed(0)}`); }
+  lines.push(`💨 Gusts up to ${Math.round(Math.max(...nn(R.summit.daily.map(d=>d.gust.med))))} mph at the summit`);
+  if(state.sno?.length){
+    const s = state.sno[0], swe = lastVal(s.WTEQ), dep = lastVal(s.SNWD);
+    const pct = swe && swe.median > 0 ? `, ${Math.round(100*swe.value/swe.median)}% of median` : '';
+    lines.push(`📊 Snowpack now: ${s.name} SNOTEL (${fmtFt(s.ft)}) ${dep?dep.value+'" deep':''}${swe?`, ${swe.value.toFixed(1)}" SWE`:''}${pct}`);
+  }
+  for(const a of (state.nws?.alerts||[])) lines.push(`⚠️ NWS: ${a.event}`);
+  lines.push('');
+  lines.push(`Confidence: ${confidence(R.summit.snowTot)} · consensus of ${R.summit.ids.length} models (${R.summit.ids.map(id=>MODELS.find(m=>m.id===id).name).join(', ')}) + NWS`);
+  return lines.join('\n');
+}
+
+// ---------- share image ----------
+function drawCard(){
+  const W=1080, H=1350, c=document.createElement('canvas'); c.width=W; c.height=H; const x=c.getContext('2d');
+  const R=state.R, B=state.B, L=state.loc, days=R.summit.days;
+  const g=x.createLinearGradient(0,0,0,H); g.addColorStop(0,'#0d366b'); g.addColorStop(1,'#111827'); x.fillStyle=g; x.fillRect(0,0,W,H);
+  const font=(w,s)=>`${w} ${s}px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif`;
+  x.fillStyle='#fff'; x.font=font(800,64); x.fillText(L.n, 64, 120);
+  x.fillStyle='#b7d3f6'; x.font=font(500,30); x.fillText(`${dayLabel(days[0])} → ${dayLabel(days[days.length-1])}`, 64, 168);
+  const cols={summit:'#86b6ef', mid:'#3ccf96', base:'#f39466'};
+  const maxHi = Math.max(1, ...BANDS.map(k=>R[k].snowTot.hi));
+  let y=240;
+  for(const k of BANDS){
+    const t=R[k].snowTot, d=R[k].daily;
+    x.fillStyle='#cde2fb'; x.font=font(600,28); x.fillText(`${B[k].label} · ${fmtFt(B[k].ft)}`, 64, y);
+    x.fillStyle='#fff'; x.font=font(800,72); x.fillText(snowStr(t.med), 64, y+78);
+    x.font=font(500,26); x.fillStyle='#b7d3f6'; x.fillText(`range ${snowRange(t.lo,t.hi)}`, 64, y+116);
+    const bx=320, bw=W-64-bx;
+    x.fillStyle='rgba(255,255,255,.12)'; x.beginPath(); x.roundRect(bx, y+30, bw, 34, 17); x.fill();
+    x.fillStyle='rgba(255,255,255,.25)'; x.beginPath(); x.roundRect(bx, y+30, Math.max(34,bw*t.hi/maxHi), 34, 17); x.fill();
+    x.fillStyle=cols[k]; x.beginPath(); x.roundRect(bx, y+30, Math.max(34,bw*t.med/maxHi), 34, 17); x.fill();
+    x.fillStyle='#e5e7eb'; x.font=font(500,26);
+    x.fillText(`Highs ${degStr(Math.max(...nn(d.map(v=>v.hi.med))))}F · Lows ${degStr(Math.min(...nn(d.map(v=>v.lo.med))))}F · ${inStr(R[k].PTot.med)} liquid`, bx, y+108);
+    y += 175;
+  }
+  // daily summit snow bars
+  x.fillStyle='#cde2fb'; x.font=font(600,28); x.fillText('Summit snow by day', 64, y+10);
+  const D=R.summit.daily, mx=Math.max(1,...D.map(d=>d.snow.med||0)), cw=(W-128)/D.length, base=y+230;
+  D.forEach((d,i)=>{ const h=170*(d.snow.med||0)/mx, cx=64+i*cw;
+    x.fillStyle=cols.summit; x.beginPath(); x.roundRect(cx+cw*.18, base-h, cw*.64, Math.max(h,3), [8,8,0,0]); x.fill();
+    x.fillStyle='#fff'; x.font=font(700,22); x.textAlign='center'; x.fillText(snowStr(d.snow.med), cx+cw/2, base-h-10);
+    x.fillStyle='#b7d3f6'; x.font=font(500,20); x.fillText(dayShort(d.d), cx+cw/2, base+30); x.textAlign='left'; });
+  y = base + 90;
+  x.font=font(500,27); x.fillStyle='#e5e7eb';
+  const S=D.filter(d=>d.sunH!=null);
+  const extra=[];
+  if(S.length) extra.push(`☀️ ~${mean(S.map(d=>d.sunH)).toFixed(1)} h sun/day · UV max ${Math.max(...nn(S.map(d=>d.uv))).toFixed(0)}`);
+  extra.push(`💨 Summit gusts to ${Math.round(Math.max(...nn(D.map(d=>d.gust.med))))} mph · 💦 RH avg ${Math.round(mean(D.map(d=>d.rh.med)))}%`);
+  if(state.sno?.length){ const s=state.sno[0], swe=lastVal(s.WTEQ), dep=lastVal(s.SNWD); extra.push(`📊 ${s.name} SNOTEL: ${dep?dep.value+'" deep':''}${swe?' · '+swe.value.toFixed(1)+'" SWE':''}`); }
+  for(const a of (state.nws?.alerts||[]).slice(0,2)) extra.push(`⚠️ ${a.event}`);
+  extra.forEach((t,i)=>x.fillText(t, 64, y+i*44));
+  x.fillStyle='#86b6ef'; x.font=font(500,20);
+  x.fillText(`${confidence(R.summit.snowTot)} confidence · ${R.summit.ids.length}-model consensus (${R.summit.ids.map(id=>MODELS.find(m=>m.id===id).name).join(', ')}) + NWS`, 64, H-70);
+  x.fillText('Data: NOAA/NWS, ECMWF, DWD, ECCC via Open-Meteo · USDA NRCS SNOTEL', 64, H-40);
+  return c;
+}
+
+// ---------- map ----------
+function initMap(){
+  if(typeof L === 'undefined') { $('#map').textContent = 'Map library failed to load.'; return; }
+  const map = L.map('map', {scrollWheelZoom:false}).setView([39.3,-106.3], 7);
+  L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {maxZoom:15, attribution:'© OpenStreetMap, SRTM · © OpenTopoMap (CC-BY-SA)'}).addTo(map);
+  LOCS.forEach(loc => {
+    L.circleMarker([loc.top[0],loc.top[1]], {radius:6, color:'#fff', weight:2, fillColor: loc.g==='14ers' ? '#4a3aa7' : loc.g==='13ers' ? '#e87ba4' : '#2a78d6', fillOpacity:1})
+      .bindTooltip(`${loc.n} · ${fmtFt(loc.top[2])}`).on('click', ()=>{ selectLoc(loc); }).addTo(map);
+  });
+  map.on('click', async e => {
+    const {lat, lng} = e.latlng;
+    let ft = 11000;
+    try { const r = await getJSON(`https://api.open-meteo.com/v1/elevation?latitude=${lat.toFixed(4)}&longitude=${lng.toFixed(4)}`); ft = Math.round(r.elevation[0]/0.3048/10)*10; } catch(err){}
+    const loc = {g:'Custom', n:`Custom spot ${lat.toFixed(3)}, ${lng.toFixed(3)}`, base:[lat,lng,Math.max(5000, ft-2000)], top:[lat,lng,ft], custom:true};
+    selectLoc(loc);
+  });
+  state.map = map;
+  state.snoLayer = L.layerGroup().addTo(map);
+}
+function drawStations(){
+  if(!state.snoLayer || state.snoDrawn || !stationsCache) return;
+  state.snoDrawn = true;
+  stationsCache.forEach(s => L.marker([s.lat,s.lon], {icon: L.divIcon({className:'', html:'<div style="font-size:11px;color:#1baf7a;text-shadow:0 0 2px #fff">▲</div>', iconSize:[10,10]})})
+    .bindTooltip(`SNOTEL: ${s.name} · ${fmtFt(s.ft)}`).addTo(state.snoLayer));
+}
+
+// ---------- wiring ----------
+function fillSelect(){
+  const sel = $('#loc'); sel.innerHTML = '';
+  const groups = {};
+  LOCS.forEach((l,i) => { const gl = l.r ? `${l.g} · ${l.r}` : l.g; (groups[gl] ||= document.createElement('optgroup')).label = gl; const o = document.createElement('option'); o.value=i; o.textContent=`${l.n} (${fmtFt(l.top[2])})`; groups[gl].append(o); });
+  Object.values(groups).forEach(g => sel.append(g));
+  if(state.loc.custom){ const o = document.createElement('option'); o.value='custom'; o.textContent=state.loc.n; sel.prepend(o); sel.value='custom'; }
+  else sel.value = LOCS.indexOf(state.loc);
+}
+function selectLoc(loc){
+  state.loc = loc; state.snoIdx = 0; fillSelect();
+  $('#customBox').hidden = !loc.custom;
+  if(loc.custom){ $('#cBase').value = loc.base[2]; $('#cTop').value = loc.top[2]; }
+  try { if(!loc.custom) localStorage.setItem('pf-loc', loc.n); } catch(e){}
+  load();
+}
+$('#locnames').innerHTML = LOCS.map(l=>`<option value="${l.n}">`).join('');
+$('#find').addEventListener('change', e => { const q = e.target.value.trim().toLowerCase(); const l = LOCS.find(x=>x.n.toLowerCase()===q) || LOCS.find(x=>x.n.toLowerCase().includes(q)); if(l){ selectLoc(l); e.target.value=''; e.target.blur(); } });
+$('#loc').addEventListener('change', e => { if(e.target.value!=='custom') selectLoc(LOCS[+e.target.value]); });
+$('#days').addEventListener('click', e => { const b = e.target.closest('button'); if(!b) return;
+  state.days = +b.dataset.d; document.querySelectorAll('#days button').forEach(x=>x.classList.toggle('on', x===b)); if(state.raw) compute(); });
+$('#tblBand').addEventListener('click', e => { const b = e.target.closest('button'); if(!b) return;
+  state.tblBand = b.dataset.b; document.querySelectorAll('#tblBand button').forEach(x=>x.classList.toggle('on', x===b)); renderTable(); });
+$('#snoTabs').addEventListener('click', e => { const b = e.target.closest('button'); if(!b) return; state.snoIdx = +b.dataset.i; renderSnotel(); });
+$('#refresh').addEventListener('click', load);
+$('#cGo').addEventListener('click', () => { const l = state.loc; l.base[2] = +$('#cBase').value; l.top[2] = +$('#cTop').value; load(); });
+$('#copy').addEventListener('click', async () => { try { await navigator.clipboard.writeText($('#summary').textContent); $('#copied').textContent='Copied ✓'; } catch(e){ $('#copied').textContent='Select the text and copy manually'; } setTimeout(()=>$('#copied').textContent='', 2500); });
+$('#share').addEventListener('click', async () => {
+  const text = $('#summary').textContent;
+  if(!navigator.share){ $('#copy').click(); $('#copied').textContent='Sharing not supported here, so the text was copied instead'; return; }
+  try {
+    const blob = await new Promise(r => drawCard().toBlob(r, 'image/png'));
+    const file = new File([blob], 'forecast.png', {type:'image/png'});
+    if(navigator.canShare?.({files:[file]})) await navigator.share({text, files:[file]}); else await navigator.share({text});
+  } catch(e){}
+});
+$('#img').addEventListener('click', () => { if(!state.R) return; const a = document.createElement('a'); a.download = `${state.loc.n.replace(/\W+/g,'-')}-forecast.png`; a.href = drawCard().toDataURL('image/png'); a.click(); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => state.R && render());
+
+try { const saved = localStorage.getItem('pf-loc'); const l = LOCS.find(x=>x.n===saved); if(l) state.loc = l; } catch(e){}
+fillSelect(); initMap(); load();
+</script>
+</body>
+</html>
