@@ -715,6 +715,7 @@ function buildSummary(){
   for(const a of (state.nws?.alerts||[])) lines.push(`⚠️ NWS: ${a.event}`);
   lines.push('');
   lines.push(`Confidence: ${confidence(R.summit.snowTot)} · consensus of ${R.summit.ids.length} models (${R.summit.ids.map(id=>MODELS.find(m=>m.id===id).name).join(', ')}) + NWS`);
+  if(location.protocol.startsWith('http') && !/localhost|127\.0\.0\.1/.test(location.host)) lines.push(`Full forecast: ${location.origin}${location.pathname}`);
   return lines.join('\n');
 }
 
